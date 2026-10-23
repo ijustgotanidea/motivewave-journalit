@@ -28,7 +28,7 @@ class Button {
 }
 class Field {
   constructor() { this.inputEl = {}; }
-  setPlaceholder() { return this; }
+  setPlaceholder(p) { this.placeholderText = p; return this; }
   setValue(v) { this.value = v; return this; }
   onChange(f) { this.change = f; return this; }
 }
@@ -77,10 +77,20 @@ const child = {
     }, 5);
   },
 };
+// fs mock: real fs, plus files the test pretends exist (e.g. /opt/homebrew/bin/python3).
+const fakeFiles = new Set();
+const fsMock = { ...fs, existsSync: (file) => fakeFiles.has(file) || fs.existsSync(file) };
+function onPlatform(platform, run) {
+  const original = Object.getOwnPropertyDescriptor(process, "platform");
+  Object.defineProperty(process, "platform", { value: platform });
+  return Promise.resolve(run()).finally(() => Object.defineProperty(process, "platform", original));
+}
+
 const load = Module._load;
 Module._load = function (request, ...rest) {
   if (request === "obsidian") return obsidian;
   if (request === "child_process") return child;
+  if (request === "fs") return fsMock;
   return load.call(this, request, ...rest);
 };
 const Plugin = require(path.join(__dirname, "..", "dist", "main.js"));
@@ -185,6 +195,35 @@ const tests = {
     await plugin.forceSync();
     assert.ok(calls.length >= 2);
     assert.match(notices[0], /Python 3 was not found/);
+  },
+
+  async "on macOS, Homebrew's python3 is tried first and the xcode-select stub counts as missing"() {
+    await onPlatform("darwin", async () => {
+      fakeFiles.add("/opt/homebrew/bin/python3");
+      try {
+        respond = (command) =>
+          command === "/opt/homebrew/bin/python3"
+            ? { error: Object.assign(new Error("exit 1"), { code: 1 }), stderr: "xcode-select: note: No developer tools were found" }
+            : { stdout: "[]" };
+        const { plugin } = await start({ since: "2026-01-01", syncOnStartup: false });
+        await plugin.engine(["deleted"]);
+        assert.deepEqual(calls.map((c) => c.command), ["/opt/homebrew/bin/python3", "python3"]);
+      } finally {
+        fakeFiles.clear();
+      }
+    });
+  },
+
+  async "macOS settings show macOS folders"() {
+    await onPlatform("darwin", async () => {
+      respond = () => ({ stdout: "" });
+      const { plugin } = await start({ since: "2026-01-01", syncOnStartup: false });
+      const placeholders = ui.settings.map((s) => s.field && s.field.placeholderText).filter(Boolean);
+      assert.ok(placeholders.includes("~/Library/MotiveWave/workspaces"));
+      assert.ok(placeholders.includes("/opt/homebrew/bin/python3"));
+      const notes = plugin.tab.containerEl.all("p").map((p) => p.text).join(" ");
+      assert.ok(notes.includes("~/Library/Application Support/motivewave-journalit"));
+    });
   },
 
   async "a custom python command with arguments is split"() {

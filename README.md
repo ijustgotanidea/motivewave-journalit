@@ -33,9 +33,13 @@ you to add a setup, a thesis and screenshots.
 
 - **Obsidian desktop** 1.4 or newer, with the **Journalit** plugin installed and set up.
 - **MotiveWave**, used on the same computer as the vault.
-- **Python 3.9 or newer**, from [python.org](https://www.python.org/downloads/). Only the standard library is
-  used. On Windows, also run `py -m pip install tzdata`. Without it, trade times use your computer's time zone
-  instead of MotiveWave's (usually New York).
+- **Python 3.9 or newer.** Only the standard library is used.
+  - **Windows:** install it from [python.org](https://www.python.org/downloads/), then run
+    `py -m pip install tzdata`. Without `tzdata`, trade times use your computer's time zone instead of
+    MotiveWave's (usually New York).
+  - **macOS:** any of [python.org](https://www.python.org/downloads/), Homebrew (`brew install python`), or
+    Apple's Command Line Tools (`xcode-select --install`, which provides Python 3.9). Nothing else is needed.
+  - **Linux:** the distribution's `python3`.
 
 ## Install
 
@@ -113,7 +117,7 @@ A trade closed at market with no stop order gets no stop, and its R stays 0.
 | --- | --- | --- |
 | Sync when Obsidian opens | on | |
 | Register trades from | install day | Older trades are ignored |
-| MotiveWave workspaces folder | `%APPDATA%\MotiveWave\workspaces` | Set it on macOS/Linux, see Limitations |
+| MotiveWave workspaces folder | where MotiveWave keeps them | Windows `%APPDATA%\MotiveWave\workspaces`, macOS `~/Library/MotiveWave/workspaces`, Linux `~/.motivewave/workspaces` |
 | Journalit journal folder | Journalit's own setting | Default `!Journalit` |
 | Account names | `simulated = Simulated` | `MotiveWave id = Journalit name` |
 | Instruments | built-in list | `ROOT = Journalit name, $ per point, tick size` |
@@ -135,8 +139,9 @@ three things in MotiveWave's data folder:
 | `historical_data/<feed>/<contract>/*.tick_data(.zip)` | Ticks, for MAE and MFE |
 
 The engine writes only the new trade notes in your vault, plus a small state file and a log outside it:
-`%LOCALAPPDATA%\motivewave-journalit\` on Windows, `~/.local/state/motivewave-journalit/` elsewhere. The state
-records which trades were already registered. It is kept per vault, so two vaults never share it.
+`%LOCALAPPDATA%\motivewave-journalit\` on Windows, `~/Library/Application Support/motivewave-journalit/` on
+macOS, `~/.local/state/motivewave-journalit/` on Linux. The state records which trades were already
+registered. It is kept per vault, so two vaults never share it.
 
 The engine also works from a terminal:
 
@@ -146,15 +151,21 @@ python motivewave_journalit.py --vault "C:/path/to/vault" --config "C:/path/to/v
 
 ## Tested with
 
-- Windows 11, MotiveWave 7.1.2 with Rithmic and CQG connections, Journalit 1.9.3, Python 3.9 and 3.14.
+- **Windows 11:** MotiveWave 7.1.2 with Rithmic and CQG connections, Journalit 1.9.3, Python 3.9 and 3.14.
+- **Linux (Ubuntu 24.04):** the engine's test suite, plus a full sync over a copy of real MotiveWave data, with
+  identical results to Windows.
+- **macOS:** not yet run on a Mac. The data folders are the ones MotiveWave 7.1.2's own code uses
+  (`~/Library/MotiveWave`), and the plugin's macOS Python lookup is covered by tests, but nobody has confirmed it
+  on real hardware. If you try it on a Mac, please open an issue either way.
 
 ## Limitations
 
-- **Windows is the tested platform.** On macOS and Linux the engine guesses where MotiveWave keeps its data; if
-  it guesses wrong, set *MotiveWave workspaces folder* yourself.
-- **MAE/MFE need MotiveWave's tick cache**, which exists only for contracts whose ticks MotiveWave loaded, for
-  example a chart with tick data open. The cache layout was verified on Rithmic data. CQG's cache uses an older
-  layout that is not read, so CQG trades get no MAE/MFE.
+- **macOS is untested on real hardware** (see above). If the plugin finds no trades, check that
+  `~/Library/MotiveWave/workspaces` exists, or set *MotiveWave workspaces folder*.
+- **MAE/MFE need MotiveWave's tick cache**, which exists only for contracts whose ticks MotiveWave loaded or
+  saved. Turning on *Save Live Ticks* in MotiveWave's historical data settings (Rithmic, CQG and CTS) keeps
+  them. The cache layout was verified on Rithmic data. CQG's cache uses an older layout that is not read, so
+  CQG trades get no MAE/MFE.
 - **PnL and R are gross.** MotiveWave's commission table is usually empty, so the plugin writes commission 0.
   Enter your real costs in Journalit.
 - **Only closed trades** are registered. An open position appears once it is flat.
@@ -165,8 +176,9 @@ python motivewave_journalit.py --vault "C:/path/to/vault" --config "C:/path/to/v
 - **Nothing appears.** Check *Register trades from*, then Force sync. If the trade still does not appear, close
   MotiveWave so it saves, and Force sync again. The log says what happened: `sync.log` in the state folder
   above.
-- **"Python 3 was not found".** Install Python from python.org, with *Add python.exe to PATH* ticked, or set
-  *Python command* to the full path of `python.exe`.
+- **"Python 3 was not found".** Windows: install Python from python.org with *Add python.exe to PATH* ticked.
+  macOS: install it with one of the options under Requirements. Or set *Python command* to the full path of
+  `python3` (`python.exe` on Windows).
 - **Times are a few hours off.** On Windows, run `py -m pip install tzdata`.
 - **Wrong instrument name or point value.** Add a line under *Instruments*.
 - **Wrong account name.** Add a line under *Account names*. Trades already written keep the old name; edit them

@@ -51,8 +51,11 @@ recoverable).
 
 Settings (all optional): workspacesDir, journalFolder, since (YYYY-MM-DD),
 accounts {MotiveWave id: Journalit name}, instruments {root: {name,
-dollarPerPoint, tickSize}}. State and log live in `%LOCALAPPDATA%` (Windows) or
-`$XDG_STATE_HOME`/`~/.local/state`, under `motivewave-journalit/`.
+dollarPerPoint, tickSize}}. MotiveWave's data folder defaults to where
+MotiveWave itself puts it: `%APPDATA%\\MotiveWave` (Windows), `~/Library/MotiveWave`
+(macOS), `~/.motivewave` (Linux). State and log live under `motivewave-journalit/`
+in `%LOCALAPPDATA%` (Windows), `~/Library/Application Support` (macOS) or
+`$XDG_STATE_HOME` / `~/.local/state` (Linux).
 
 Standard library only; Python 3.9+.
 """
@@ -104,17 +107,18 @@ DEFAULT_INSTRUMENTS = {
 }
 
 
-def default_state_dir() -> Path:
-    if os.name == "nt":
-        base = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+def default_state_dir(platform: str = sys.platform, home: Path | None = None, env=os.environ) -> Path:
+    home = home or Path.home()
+    if platform == "win32":
+        base = Path(env.get("LOCALAPPDATA") or home / "AppData" / "Local")
+    elif platform == "darwin":
+        base = home / "Library" / "Application Support"
     else:
-        base = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+        base = Path(env.get("XDG_STATE_HOME") or home / ".local" / "state")
     return base / "motivewave-journalit"
 
 
 STATE_DIR = default_state_dir()
-LOCK_PATH = STATE_DIR / "sync.lock"
-LOG_PATH = STATE_DIR / "sync.log"
 
 log = logging.getLogger("motivewave_journalit")
 
@@ -591,16 +595,29 @@ def render_note(
 # --------------------------------------------------------------------------- sync
 
 
-def default_workspaces_dir() -> Path:
-    if os.name == "nt":
-        return Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming") / "MotiveWave" / "workspaces"
-    candidates = [  # not verified outside Windows; set workspacesDir if none of these is right
-        Path.home() / "Library" / "Application Support" / "MotiveWave" / "workspaces",
-        Path.home() / "Library" / "MotiveWave" / "workspaces",
-        Path.home() / ".motivewave" / "workspaces",
-        Path.home() / "MotiveWave" / "workspaces",
-    ]
-    return next((path for path in candidates if path.exists()), candidates[0])
+def motivewave_data_dirs(platform: str = sys.platform, home: Path | None = None, env=os.environ) -> list[Path]:
+    """Where MotiveWave may keep workspaces and historical data, in MotiveWave's own order.
+
+    Mirrors MotiveWave 7's Workspace.getWorkingDir(): macOS ~/Library/<app>; Linux
+    ~/.<app>; Windows ~/.<app> when it exists, else %APPDATA%\\<app>. <app> is
+    "MotiveWave", or "EdgeProX" for that branded edition.
+    """
+    home = home or Path.home()
+    dirs = []
+    for app in ("MotiveWave", "EdgeProX"):
+        if platform == "darwin":
+            dirs.append(home / "Library" / app)
+        elif platform == "win32":
+            dirs += [home / f".{app.lower()}", Path(env.get("APPDATA") or home / "AppData" / "Roaming") / app]
+        else:
+            dirs.append(home / f".{app.lower()}")
+    return dirs
+
+
+def default_workspaces_dir(platform: str = sys.platform, home: Path | None = None, env=os.environ) -> Path:
+    dirs = motivewave_data_dirs(platform, home, env)
+    standard = dirs[1] if platform == "win32" else dirs[0]
+    return next((d / "workspaces" for d in dirs if (d / "workspaces").is_dir()), standard / "workspaces")
 
 
 def load_config(path: Path | None) -> dict:
@@ -867,7 +884,7 @@ def sync(config: dict, dry_run: bool = False, restore: frozenset[str] = frozense
 def acquire_lock():
     """Hold byte 0 of the lock file while syncing; None if another sync holds it."""
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    handle = open(LOCK_PATH, "a+")
+    handle = open(STATE_DIR / "sync.lock", "a+")
     handle.seek(0)
     try:
         if os.name == "nt":
@@ -900,7 +917,8 @@ def main() -> int:
     ROOT = args.vault.resolve()
 
     STATE_DIR.mkdir(parents=True, exist_ok=True)
-    handlers: list[logging.Handler] = [RotatingFileHandler(LOG_PATH, maxBytes=1_000_000, backupCount=1, encoding="utf-8")]
+    log_file = STATE_DIR / "sync.log"
+    handlers: list[logging.Handler] = [RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=1, encoding="utf-8")]
     if sys.stderr is not None:
         handlers.append(logging.StreamHandler())
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s", handlers=handlers)

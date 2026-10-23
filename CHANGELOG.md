@@ -12,3 +12,6 @@ First public release.
 - Syncs when Obsidian opens. Force sync lists deleted trades and restores the ones you tick.
 - Settings for accounts, instruments, start date, folders and the Python command. English and Portuguese
   interface.
+- Windows, macOS and Linux: MotiveWave's data folder is found where MotiveWave itself keeps it on each system,
+  and on macOS Python is found in Homebrew, python.org and Command Line Tools installs even when Obsidian is
+  started from the Dock. macOS has not been run on real hardware yet.

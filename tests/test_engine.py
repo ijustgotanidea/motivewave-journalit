@@ -281,6 +281,52 @@ class Settings(unittest.TestCase):
         self.assertEqual(self.f.config()["journalRoot"], self.f.vault / "Journal")
         self.assertEqual(self.f.config(journalFolder="Trades")["journalRoot"], self.f.vault / "Trades")
 
+    def test_sync_lock_is_exclusive(self):
+        first = mj.acquire_lock()
+        try:
+            self.assertIsNotNone(first)
+            self.assertIsNone(mj.acquire_lock())
+        finally:
+            first.close()
+        second = mj.acquire_lock()
+        self.assertIsNotNone(second)
+        second.close()
+
+
+class Platforms(unittest.TestCase):
+    """MotiveWave's data folder and the state folder on each OS (MotiveWave 7's own rule)."""
+
+    def setUp(self):
+        self.home = Path(tempfile.mkdtemp())
+        self.env = {"APPDATA": str(self.home / "Roaming"), "LOCALAPPDATA": str(self.home / "Local")}
+
+    def tearDown(self):
+        shutil.rmtree(self.home, ignore_errors=True)
+
+    def workspaces(self, platform: str) -> Path:
+        return mj.default_workspaces_dir(platform, self.home, self.env)
+
+    def test_standard_folders_when_nothing_exists_yet(self):
+        self.assertEqual(self.workspaces("darwin"), self.home / "Library" / "MotiveWave" / "workspaces")
+        self.assertEqual(self.workspaces("linux"), self.home / ".motivewave" / "workspaces")
+        self.assertEqual(self.workspaces("win32"), self.home / "Roaming" / "MotiveWave" / "workspaces")
+
+    def test_windows_prefers_dot_folder_when_present_like_motivewave(self):
+        (self.home / "Roaming" / "MotiveWave" / "workspaces").mkdir(parents=True)
+        (self.home / ".motivewave" / "workspaces").mkdir(parents=True)
+        self.assertEqual(self.workspaces("win32"), self.home / ".motivewave" / "workspaces")
+
+    def test_branded_edgeprox_folder_is_found(self):
+        (self.home / "Library" / "EdgeProX" / "workspaces").mkdir(parents=True)
+        self.assertEqual(self.workspaces("darwin"), self.home / "Library" / "EdgeProX" / "workspaces")
+
+    def test_state_folder(self):
+        state = lambda platform, env=self.env: mj.default_state_dir(platform, self.home, env)  # noqa: E731
+        self.assertEqual(state("darwin"), self.home / "Library" / "Application Support" / "motivewave-journalit")
+        self.assertEqual(state("win32"), self.home / "Local" / "motivewave-journalit")
+        self.assertEqual(state("linux", {}), self.home / ".local" / "state" / "motivewave-journalit")
+        self.assertEqual(state("linux", {"XDG_STATE_HOME": str(self.home / "x")}), self.home / "x" / "motivewave-journalit")
+
 
 if __name__ == "__main__":
     unittest.main()

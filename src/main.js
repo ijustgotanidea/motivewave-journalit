@@ -29,7 +29,9 @@ const STRINGS = {
     command: "Force sync",
     missingTool: "MotiveWave: the sync engine could not be written to the plugin folder.",
     failed: "MotiveWave: sync failed.",
-    noPython: "MotiveWave: Python 3 was not found. Install it from python.org, or set the Python command in the plugin settings.",
+    noPython:
+      "MotiveWave: Python 3 was not found. Install it from python.org (on a Mac, Homebrew or `xcode-select --install` also work), " +
+      "or set the Python command in the plugin settings.",
     created: (n) => `${n} new`,
     restored: (n) => `${n} restored`,
     wrote: (parts) => `MotiveWave: ${parts} in Journalit.`,
@@ -65,7 +67,9 @@ const STRINGS = {
       "One per line: contract root = Journalit instrument, dollars per point, tick size " +
       `(e.g. NQ = NQ1, 20, 0.25). Adds to or overrides the built-in list: ${defaults}.`,
     pythonName: "Python command",
-    pythonDesc: "Leave empty to find Python 3 automatically (py -3, python, python3). Otherwise a full path to python.",
+    pythonDesc:
+      "Leave empty to find Python 3 automatically (Windows: py -3, python; macOS/Linux: Homebrew, python.org, python3). " +
+      "Otherwise the full path to python3.",
     badLines: (lines) => `Ignored, not in the expected format: ${lines}`,
     stateDesc: (dir) => `State and log: ${dir}`,
   },
@@ -73,7 +77,9 @@ const STRINGS = {
     command: "Forçar sync",
     missingTool: "MotiveWave: não foi possível gravar o motor de sync na pasta do plugin.",
     failed: "MotiveWave: sync falhou.",
-    noPython: "MotiveWave: Python 3 não foi encontrado. Instale pelo python.org ou informe o comando do Python nas configurações do plugin.",
+    noPython:
+      "MotiveWave: Python 3 não foi encontrado. Instale pelo python.org (no Mac, Homebrew ou `xcode-select --install` também servem), " +
+      "ou informe o comando do Python nas configurações do plugin.",
     created: (n) => `${n} nova(s)`,
     restored: (n) => `${n} recuperada(s)`,
     wrote: (parts) => `MotiveWave: ${parts} no Journalit.`,
@@ -109,13 +115,33 @@ const STRINGS = {
       "Um por linha: raiz do contrato = instrumento no Journalit, dólares por ponto, tick " +
       `(ex.: NQ = NQ1, 20, 0.25). Soma ou substitui a lista embutida: ${defaults}.`,
     pythonName: "Comando do Python",
-    pythonDesc: "Deixe vazio para achar o Python 3 sozinho (py -3, python, python3). Ou o caminho completo do python.",
+    pythonDesc:
+      "Deixe vazio para achar o Python 3 sozinho (Windows: py -3, python; macOS/Linux: Homebrew, python.org, python3). " +
+      "Ou o caminho completo do python3.",
     badLines: (lines) => `Ignorado, fora do formato: ${lines}`,
     stateDesc: (dir) => `Estado e log: ${dir}`,
   },
 };
 
 const BUILT_IN = "NQ, ENQ, MNQ, ES, EP, MES, YM, MYM, RTY, M2K, CL, MCL, GC, MGC, SI";
+
+// Obsidian started from the Dock or Finder does not see the shell's PATH, so
+// Homebrew and python.org installs are looked up by their full paths.
+const UNIX_PYTHONS = [
+  "/opt/homebrew/bin/python3",
+  "/usr/local/bin/python3",
+  "/Library/Frameworks/Python.framework/Versions/Current/bin/python3",
+];
+
+const PLATFORM_PATHS = {
+  win32: { workspaces: "%APPDATA%\\MotiveWave\\workspaces", state: "%LOCALAPPDATA%\\motivewave-journalit" },
+  darwin: { workspaces: "~/Library/MotiveWave/workspaces", state: "~/Library/Application Support/motivewave-journalit" },
+  linux: { workspaces: "~/.motivewave/workspaces", state: "~/.local/state/motivewave-journalit" },
+};
+
+function platformPaths() {
+  return PLATFORM_PATHS[process.platform] || PLATFORM_PATHS.linux;
+}
 
 function t() {
   return (moment?.locale?.() || "en").toLowerCase().startsWith("pt") ? STRINGS.pt : STRINGS.en;
@@ -211,9 +237,9 @@ module.exports = class MotiveWaveJournalit extends Plugin {
       const [command, ...prefix] = custom.split(/\s+/);
       return [[command, prefix]];
     }
-    return process.platform === "win32"
-      ? [["py", ["-3"]], ["python", []], ["python3", []]]
-      : [["python3", []], ["python", []]];
+    if (process.platform === "win32") return [["py", ["-3"]], ["python", []], ["python3", []]];
+    const installed = UNIX_PYTHONS.filter((file) => fs.existsSync(file)).map((file) => [file, []]);
+    return [...installed, ["python3", []], ["python", []]];
   }
 
   engine(args) {
@@ -232,8 +258,10 @@ module.exports = class MotiveWaveJournalit extends Plugin {
       new Promise((resolve, reject) => {
         const [command, prefix] = candidates[index];
         execFile(command, [...prefix, ...full], { cwd: vault, windowsHide: true }, (error, stdout, stderr) => {
-          // Not installed: ENOENT, or the Windows Store alias that only prints an install hint (exit 9009).
-          const missing = error && (error.code === "ENOENT" || error.code === 9009 || /Microsoft Store/i.test(stderr));
+          // Not installed: ENOENT; the Windows Store alias that only prints an install hint (exit 9009);
+          // or macOS's /usr/bin/python3 stub before the Command Line Tools are installed.
+          const missing =
+            error && (error.code === "ENOENT" || error.code === 9009 || /Microsoft Store|xcode-select/i.test(stderr));
           if (missing && index + 1 < candidates.length) attempt(index + 1).then(resolve, reject);
           else if (missing) reject(new Error(t().noPython));
           else if (error) reject(new Error((stderr || error.message).trim().split("\n").slice(-3).join("\n")));
@@ -385,7 +413,7 @@ class MotiveWaveJournalitSettings extends PluginSettingTab {
       .setDesc(t().workspacesDesc)
       .addText((text) =>
         text
-          .setPlaceholder(process.platform === "win32" ? "%APPDATA%\\MotiveWave\\workspaces" : "~/…/MotiveWave/workspaces")
+          .setPlaceholder(platformPaths().workspaces)
           .setValue(s.workspacesDir)
           .onChange((value) => ((s.workspacesDir = value.trim()), save()))
       );
@@ -420,11 +448,14 @@ class MotiveWaveJournalitSettings extends PluginSettingTab {
     new Setting(containerEl)
       .setName(t().pythonName)
       .setDesc(t().pythonDesc)
-      .addText((text) => text.setPlaceholder("py -3").setValue(s.python).onChange((value) => ((s.python = value), save())));
+      .addText((text) =>
+        text
+          .setPlaceholder(process.platform === "win32" ? "py -3" : "/opt/homebrew/bin/python3")
+          .setValue(s.python)
+          .onChange((value) => ((s.python = value), save()))
+      );
 
-    const stateDir =
-      process.platform === "win32" ? "%LOCALAPPDATA%\\motivewave-journalit" : "~/.local/state/motivewave-journalit";
-    containerEl.createEl("p", { text: t().stateDesc(stateDir), cls: "setting-item-description" });
+    containerEl.createEl("p", { text: t().stateDesc(platformPaths().state), cls: "setting-item-description" });
   }
 
   linesSetting(name, desc, value, placeholder, parseValue, assign) {
