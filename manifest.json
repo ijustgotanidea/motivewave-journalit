@@ -1,0 +1,10 @@
+{
+  "id": "motivewave-journalit",
+  "name": "MotiveWave → Journalit",
+  "version": "1.0.0",
+  "minAppVersion": "1.4.0",
+  "description": "Registers your closed MotiveWave trades, simulated and live, as Journalit trade notes, with stop, R, MAE and MFE.",
+  "author": "Caio",
+  "authorUrl": "https://github.com/ijustgotanidea",
+  "isDesktopOnly": true
+}

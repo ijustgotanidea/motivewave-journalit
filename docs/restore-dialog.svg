@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <rect x="0.5" y="0.5" width="759" height="299" rx="10" fill="#202020" stroke="#444"/>
+  <text x="28" y="42" font-size="18" font-weight="600" fill="#eee">Restore deleted trades</text>
+  <text x="28" y="72" font-size="13" fill="#aaa">These trades were deleted from Journalit. The ticked ones will be written again from MotiveWave</text>
+  <text x="28" y="90" font-size="13" fill="#aaa">(anything you had written in them does not come back). Untick the ones that should stay deleted.</text>
+  <g font-size="13" fill="#ddd">
+    <rect x="28" y="110" width="14" height="14" rx="3" fill="#7c5cff"/>
+    <path d="M31 117 l3 3 l6 -7" stroke="#fff" stroke-width="2" fill="none"/>
+    <text x="52" y="122">2026-10-23 09:47:26 · Forward Testing · NQ1 short 2 @ 29113.38 → 29135.25 · −$875 · NQ1-231026-T1</text>
+    <rect x="28" y="140" width="14" height="14" rx="3" fill="none" stroke="#888"/>
+    <text x="52" y="152">2026-10-23 09:48:40 · Forward Testing · NQ1 short 1 @ 29110 → 29132.5 · −$450 · NQ1-231026-T2</text>
+    <rect x="28" y="170" width="14" height="14" rx="3" fill="#7c5cff"/>
+    <path d="M31 177 l3 3 l6 -7" stroke="#fff" stroke-width="2" fill="none"/>
+    <text x="52" y="182">2026-10-23 09:49:17 · Forward Testing · NQ1 short 1 @ 29127 → 29148 · −$420 · NQ1-231026-T3</text>
+  </g>
+  <rect x="440" y="236" width="90" height="34" rx="6" fill="#333" stroke="#555"/>
+  <text x="485" y="258" font-size="13" fill="#ddd" text-anchor="middle">Cancel</text>
+  <rect x="542" y="236" width="190" height="34" rx="6" fill="#7c5cff"/>
+  <text x="637" y="258" font-size="13" fill="#fff" text-anchor="middle">Restore 2 and sync</text>
+</svg>
